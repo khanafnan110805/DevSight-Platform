@@ -1,0 +1,64 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────
+# DevSight — Local Development Docker Compose
+#
+# Usage:
+#   docker compose up --build        Start all services
+#   docker compose up -d              Start detached
+#   docker compose logs -f frontend   Stream frontend logs
+#   docker compose down               Stop & remove containers
+# ─────────────────────────────────────────────────────────
+
+services:
+  # ── Frontend: React + Vite Dev Server ──────────────────
+  frontend:
+    build:
+      context: ../client
+      dockerfile: ../docker/Dockerfile.client
+      target: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../client:/app
+      - /app/node_modules          # Preserve container's node_modules
+    environment:
+      - VITE_API_URL=http://localhost:4000
+      - VITE_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - VITE_APP_URL=http://localhost:3000
+      - VITE_FEATURE_PRIVATE_REPOS=${VITE_FEATURE_PRIVATE_REPOS:-false}
+      - VITE_FEATURE_AI_INSIGHTS=${VITE_FEATURE_AI_INSIGHTS:-false}
+      - CHOKIDAR_USEPOLLING=true    # Required for Windows Docker Desktop HMR
+    depends_on:
+      - api
+    networks:
+      - devsight-network
+    restart: unless-stopped
+
+  # ── API: Node.js + Express (OAuth proxy) ───────────────
+  api:
+    build:
+      context: ../server
+      dockerfile: ../docker/Dockerfile.server
+      target: development
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../server:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - CLIENT_URL=http://localhost:3000
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+    env_file:
+      - ../.env.local
+    networks:
+      - devsight-network
+    restart: unless-stopped
+
+networks:
+  devsight-network:
+    driver: bridge
